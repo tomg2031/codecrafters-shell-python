@@ -41,7 +41,7 @@ def error_message():
             if target in builtins:
                 sys.stdout.write(f"{target} is a shell builtin\n")
             elif full_path := shutil.which(target):
-                 sys.stdout.write(f"{target} is {full_path}")
+                 sys.stdout.write(f"{target} is {full_path}\n")
             else:
                 sys.stdout.write(f"{target}: not found\n")
 
