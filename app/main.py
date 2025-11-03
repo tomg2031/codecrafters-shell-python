@@ -15,7 +15,7 @@ def errorMessage():
         sys.exit(0)
     command_list = command.split(" ")
     if command_list[0] == "echo":
-        output = " ".join(command_list[1:] + "\n")
+        output = " ".join(command_list[1:]) + "\n"
         sys.stdout.write(output)
     else:
         # prints the "<command>: command not found" message
