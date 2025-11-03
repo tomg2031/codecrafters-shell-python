@@ -36,7 +36,7 @@ def error_message():
             sys.stdout.write("type: missing operand\n")
         else:
             target = parts[1]
-            builtins = {"echo", "type"}  # add more as you implement them
+            builtins = {"echo", "type", "exit"}  # add more as you implement them
             if target in builtins:
                 sys.stdout.write(f"{target} is a shell builtin\n")
             else:
