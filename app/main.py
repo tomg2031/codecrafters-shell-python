@@ -18,7 +18,7 @@ def errorMessage():
         output = " ".join(command_list[1:]) + "\n"
         sys.stdout.write(output)
     if command_list[0] == "type":
-        output = f"{command_list[1:]}is a shell builtin\n"
+        output = f"{command_list[3:8]}is a shell builtin\n"
         sys.stdout.write(output)
     else:
         # prints the "<command>: command not found" message
