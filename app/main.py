@@ -19,7 +19,7 @@ def errorMessage():
         sys.stdout.write(output)
     else:
         # prints the "<command>: command not found" message
-        print(f"{command}: command not found\n")
+        sys.stdout.write(f"{command}: command not found\n")
 
 
 if __name__ == "__main__":
