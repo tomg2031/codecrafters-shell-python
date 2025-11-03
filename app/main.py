@@ -26,16 +26,22 @@ def error_message():
 
     parts = command.split()
     cmd = parts[0]
-
+    # condition if echo is entered
     if cmd == "echo":
         output = " ".join(parts[1:]) + "\n"
         sys.stdout.write(output)
+    # condition if type is entered 
     elif cmd == "type":
-        # if user typed "type echo" -> we should report "echo is a shell builtin"
-        if len(parts) >= 2:
-            sys.stdout.write(f"{parts[1]} is a shell builtin\n")
-        else:
+        if len(parts) < 2:
             sys.stdout.write("type: missing operand\n")
+        else:
+            target = parts[1]
+            builtins = {"echo", "type"}  # add more as you implement them
+            if target in builtins:
+                sys.stdout.write(f"{target} is a shell builtin\n")
+            else:
+                sys.stdout.write(f"{target}: not found\n")
+
     else:
         # prints the "<command>: command not found" message
         sys.stdout.write(f"{command}: command not found\n")
