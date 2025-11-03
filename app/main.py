@@ -11,7 +11,12 @@ def main():
 def errorMessage():
     # Wait for user input
     command = input()
-    print(f"{command}: command not found")
+    if command.startswith("exit"): 
+        sys.exit(0)
+    
+    else:
+        # prints the "<command>: command not found" message
+        print(f"{command}: command not found")
 
 
 if __name__ == "__main__":
