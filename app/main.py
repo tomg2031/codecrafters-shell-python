@@ -17,6 +17,9 @@ def errorMessage():
     if command_list[0] == "echo":
         output = " ".join(command_list[1:]) + "\n"
         sys.stdout.write(output)
+    if command_list[0] == "type":
+        output = f"{command}is a shell builtin\n"
+        sys.stdout.write(output)
     else:
         # prints the "<command>: command not found" message
         sys.stdout.write(f"{command}: command not found\n")
