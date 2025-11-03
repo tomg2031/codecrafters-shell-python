@@ -1,4 +1,5 @@
 import sys
+import shutil
 
 def main():
     while True:
@@ -39,6 +40,8 @@ def error_message():
             builtins = {"echo", "type", "exit"}  # add more as you implement them
             if target in builtins:
                 sys.stdout.write(f"{target} is a shell builtin\n")
+            elif full_path := shutil.which(target):
+                 sys.stdout.write(f"{target} is {full_path}")
             else:
                 sys.stdout.write(f"{target}: not found\n")
 
