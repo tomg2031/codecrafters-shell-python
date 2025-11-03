@@ -1,28 +1,46 @@
 import sys
 
-
 def main():
-    # TODO: Uncomment the code below to pass the first stage
-    sys.stdout.write("$ ")
-    errorMessage()
-    main()
+    while True:
+        # prompt
+        sys.stdout.write("$ ")
+        sys.stdout.flush()
 
-    
-def errorMessage():
+        try:
+            if not error_message():
+                # error_message returns False when we should exit loop
+                break
+        except EOFError:
+            # Ctrl-D / end-of-input => exit
+            break
+
+
+def error_message():
     # Wait for user input
-    command = input()
-    if command.startswith("exit"): 
-        sys.exit(0)
-    command_list = command.split(" ")
-    if command_list[0] == "echo":
-        output = " ".join(command_list[1:]) + "\n"
+    command = input().strip()
+    if not command:
+        return True  # empty line, just re-prompt
+
+    if command.startswith("exit"):
+        return False  # signal to caller to stop
+
+    parts = command.split()
+    cmd = parts[0]
+
+    if cmd == "echo":
+        output = " ".join(parts[1:]) + "\n"
         sys.stdout.write(output)
-    if command_list[0] == "type":
-        output = f"{command_list[0]}is a shell builtin\n"
-        sys.stdout.write(output)
+    elif cmd == "type":
+        # if user typed "type echo" -> we should report "echo is a shell builtin"
+        if len(parts) >= 2:
+            sys.stdout.write(f"{parts[1]} is a shell builtin\n")
+        else:
+            sys.stdout.write("type: missing operand\n")
     else:
         # prints the "<command>: command not found" message
         sys.stdout.write(f"{command}: command not found\n")
+
+    return True  # keep looping
 
 
 if __name__ == "__main__":
