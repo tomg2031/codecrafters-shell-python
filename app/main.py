@@ -1,56 +1,98 @@
+#!/usr/bin/env python3
 import sys
+import os
+import shlex
 import shutil
+import subprocess
 
 def main():
-    while True:
-        # prompt
-        sys.stdout.write("$ ")
-        sys.stdout.flush()
 
+    print("PYTHON PATH:", os.environ.get("PATH"))
+    print("shutil.which('codecrafters') ->", shutil.which("codecrafters"))
+
+
+    while True:
         try:
+            # prompt
+            sys.stdout.write("$ ")
+            sys.stdout.flush()
+
             if not error_message():
-                # error_message returns False when we should exit loop
-                break
+                break  # exit requested
+
         except EOFError:
             # Ctrl-D / end-of-input => exit
+            sys.stdout.write("\n")
             break
-
+        except KeyboardInterrupt:
+            # Ctrl-C: print newline and continue prompting
+            sys.stdout.write("\n")
+            continue
 
 def error_message():
-    # Wait for user input
-    command = input().strip()
-    if not command:
-        return True  # empty line, just re-prompt
+    line = input().strip()
+    if not line:
+        return True
 
-    if command.startswith("exit"):
-        return False  # signal to caller to stop
+    if line.startswith("exit"):
+        return False
 
-    parts = command.split()
+    # parse respecting quotes
+    try:
+        parts = shlex.split(line)
+    except ValueError as e:
+        # malformed quoting
+        print(f"shell: parse error: {e}")
+        return True
+
     cmd = parts[0]
-    # condition if echo is entered
+
+    # builtins
     if cmd == "echo":
-        output = " ".join(parts[1:]) + "\n"
-        sys.stdout.write(output)
-    # condition if type is entered 
-    elif cmd == "type":
+        print(" ".join(parts[1:]))
+        return True
+
+    if cmd == "type":
         if len(parts) < 2:
-            sys.stdout.write("type: missing operand\n")
+            print("type: missing operand")
         else:
             target = parts[1]
-            builtins = {"echo", "type", "exit"}  # add more as you implement them
+            builtins = {"echo", "type", "exit"}
             if target in builtins:
-                sys.stdout.write(f"{target} is a shell builtin\n")
-            elif full_path := shutil.which(target):
-                 sys.stdout.write(f"{target} is {full_path}\n")
+                print(f"{target} is a shell builtin")
+            elif (full := shutil.which(target)):
+                print(f"{target} is {full}")
             else:
-                sys.stdout.write(f"{target}: not found\n")
-
+                print(f"{target}: not found")
+        return True
     else:
-        # prints the "<command>: command not found" message
-        sys.stdout.write(f"{command}: command not found\n")
+        # check if command is an external program
+        if full_path := findExe(cmd):
+        
 
-    return True  # keep looping
+            # run it safely with arguments
+            try:
+                result = subprocess.run([full_path] + parts[1:], check=True)
+                sys.stdout.write(result.stdout.decode() if result.stdout else "")
+                # optionally: handle non-zero exit codes
+                # if result.returncode != 0:s
+                #     print(f"exit status: {result.returncode}")
+            except FileNotFoundError:
+                print(f"{cmd}: not found (FileNotFoundError)")
+            except PermissionError:
+                print(f"{cmd}: permission denied")
+            except Exception as e:
+                print(f"{cmd}: execution failed: {e}")
+        
+        else:
+            print(f"{cmd}: command not found")
+            return True
 
+        return True
+
+def findExe(exe):
+    """Return full path to executable or None."""
+    return shutil.which(exe)
 
 if __name__ == "__main__":
     main()
