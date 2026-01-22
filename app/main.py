@@ -7,8 +7,8 @@ import subprocess
 
 def main():
 
-    print("PYTHON PATH:", os.environ.get("PATH"))
-    print("shutil.which('codecrafters') ->", shutil.which("codecrafters"))
+    # print("PYTHON PATH:", os.environ.get("PATH"))
+    # print("shutil.which('codecrafters') ->", shutil.which("codecrafters"))
 
 
     while True:
@@ -68,12 +68,9 @@ def error_message():
     else:
         # check if command is an external program
         if full_path := findExe(cmd):
-        
-
             # run it safely with arguments
             try:
-                result = subprocess.run([full_path] + parts[1:], check=True)
-                sys.stdout.write(result.stdout.decode() if result.stdout else "")
+                subprocess.run([full_path] + parts[1:])
                 # optionally: handle non-zero exit codes
                 # if result.returncode != 0:s
                 #     print(f"exit status: {result.returncode}")
