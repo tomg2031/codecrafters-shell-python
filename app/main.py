@@ -67,10 +67,10 @@ def error_message():
         return True
     else:
         # check if command is an external program
-        if full_path := findExe(cmd):
+        if cmd := findExe(cmd):
             # run it safely with arguments
             try:
-                subprocess.run([full_path] + parts[1:])
+                subprocess.run([cmd] + parts[1:])
                 # optionally: handle non-zero exit codes
                 # if result.returncode != 0:s
                 #     print(f"exit status: {result.returncode}")
