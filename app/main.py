@@ -72,13 +72,14 @@ def error_message():
     
     elif cmd == "cd":
         if len(parts) > 1:
-            try:
-                if parts[1] == "~":
+             if parts[1] == "~":
                     parts[1] = os.getenv("HOME")
-                else:
-                    os.chdir(parts[1])
-            except OSError:
+             try:
+                 os.chdir(parts[1])
+             except OSError:
                 print(f"cd: {parts[1]}: No such file or directory")
+        else:
+            os.chdir(os.getenv("HOME"))
         return True
 
     else:
