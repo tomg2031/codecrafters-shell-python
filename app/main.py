@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import readline
 import shlex
 import shutil
 import subprocess
@@ -16,6 +17,8 @@ def main():
             # prompt
             sys.stdout.write("$ ")
             sys.stdout.flush()
+            readline.set_completer(auto_complete)
+            readline.parse_and_bind("tab: complete")
 
             if not handle_command():
                 break  # exit requested
@@ -94,6 +97,11 @@ def handle_command():
             else:
                 print(f"{cmd}: command not found")
     return True
+
+def auto_complete(text, state):
+    builtin = {"echo", "type", "exit", "pwd", "cd"}
+    matches = [cmd for cmd in builtin if cmd.startswith(text)]
+    return matches[state] if state < len(matches) else None
 
 def findExe(exe):
     """Return full path to executable or None."""
