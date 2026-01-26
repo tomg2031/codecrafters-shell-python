@@ -71,11 +71,12 @@ def error_message():
         return True
     
     elif cmd == "cd":
-        if len(cmd) > 1:
+        if len(parts) > 1:
             try:
-                os.chdir(cmd[1])
+                os.chdir(parts[1])
             except OSError:
-                print(f"cd: {cmd[1]}: No such file or directory")
+                print(f"cd: {parts[1]}: No such file or directory")
+        return True
 
     else:
         # check if command is an external program
