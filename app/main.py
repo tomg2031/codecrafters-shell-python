@@ -57,7 +57,7 @@ def error_message():
             print("type: missing operand")
         else:
             target = parts[1]
-            builtins = {"echo", "type", "exit"}
+            builtins = {"echo", "type", "exit", "pwd"}
             if target in builtins:
                 print(f"{target} is a shell builtin")
             elif (full := shutil.which(target)):
@@ -68,7 +68,7 @@ def error_message():
     
     elif cmd == "pwd":
         print(os.getcwd())
-        
+
     else:
         # check if command is an external program
         if full_path := findExe(cmd):
