@@ -52,7 +52,7 @@ def error_message():
         print(" ".join(parts[1:]))
         return True
 
-    if cmd == "type":
+    elif cmd == "type":
         if len(parts) < 2:
             print("type: missing operand")
         else:
@@ -65,6 +65,10 @@ def error_message():
             else:
                 print(f"{target}: not found")
         return True
+    
+    elif cmd == "pwd":
+        print(os.getcwd())
+        
     else:
         # check if command is an external program
         if full_path := findExe(cmd):
