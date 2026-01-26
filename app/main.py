@@ -68,6 +68,7 @@ def error_message():
     
     elif cmd == "pwd":
         print(os.getcwd())
+        return True
 
     else:
         # check if command is an external program
