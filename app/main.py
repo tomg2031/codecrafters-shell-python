@@ -46,9 +46,10 @@ def error_message():
         return True
 
     cmd = parts[0]
-    
+
     if ">" in line or "1>" in line:
         os.system(line)
+        return True
 
     # builtins
     elif cmd == "echo":
