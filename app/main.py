@@ -99,7 +99,7 @@ def handle_command():
     return True
 
 def auto_complete(text, state):
-    builtin = {"echo", "type", "exit", "pwd", "cd"}
+    builtin = {"echo ", "type ", "exit ", "pwd ", "cd "}
     matches = [cmd for cmd in builtin if cmd.startswith(text)]
     return matches[state] if state < len(matches) else None
 
