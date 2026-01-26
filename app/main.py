@@ -46,9 +46,12 @@ def error_message():
         return True
 
     cmd = parts[0]
+    
+    if ">" in line or "1>" in line:
+        os.system(line)
 
     # builtins
-    if cmd == "echo":
+    elif cmd == "echo":
         print(" ".join(parts[1:]))
         return True
 
