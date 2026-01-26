@@ -17,7 +17,7 @@ def main():
             sys.stdout.write("$ ")
             sys.stdout.flush()
 
-            if not error_message():
+            if not handle_command():
                 break  # exit requested
 
         except EOFError:
@@ -29,13 +29,22 @@ def main():
             sys.stdout.write("\n")
             continue
 
-def error_message():
-    line = input().strip()
+def handle_command():
+    try:
+        line = input().strip()
+    except EOFError:
+        print()
+        return False
+    
     if not line:
         return True
-
-    if line.startswith("exit"):
+    if line == "exit 0" or line.startswith("exit"):
         return False
+    
+    # Redirection check
+    if ">" in line or "1>" in line:
+        os.system(line)
+        return True
 
     # parse respecting quotes
     try:
@@ -45,68 +54,46 @@ def error_message():
         print(f"shell: parse error: {e}")
         return True
 
-    cmd = parts[0]
-
-    if ">" in line or "1>" in line:
-        os.system(line)
-        return True
+    cmd, *args = parts
 
     # builtins
-    elif cmd == "echo":
-        print(" ".join(parts[1:]))
-        return True
-
-    elif cmd == "type":
-        if len(parts) < 2:
-            print("type: missing operand")
-        else:
-            target = parts[1]
-            builtins = {"echo", "type", "exit", "pwd", "cd"}
-            if target in builtins:
-                print(f"{target} is a shell builtin")
-            elif (full := shutil.which(target)):
-                print(f"{target} is {full}")
-            else:
-                print(f"{target}: not found")
-        return True
-    
-    elif cmd == "pwd":
-        print(os.getcwd())
-        return True
-    
-    elif cmd == "cd":
-        if len(parts) > 1:
-             if parts[1] == "~":
-                    parts[1] = os.getenv("HOME")
-             try:
-                 os.chdir(parts[1])
-             except OSError:
-                print(f"cd: {parts[1]}: No such file or directory")
-        else:
-            os.chdir(os.getenv("HOME"))
-        return True
-
-    else:
-        # check if command is an external program
-        if full_path := findExe(cmd):
-            # run it safely with arguments
+    match cmd:
+        case "echo":
+            print(" ".join(args))
+        case "pwd":
+            print(os.getcwd())
+        case "cd":
+            path = args[0] if args else os.getnev("HOME")
+            if path == "~":
+                path = os.getenv("HOME")
             try:
-                subprocess.run([cmd] + parts[1:], executable=full_path)
-                # optionally: handle non-zero exit codes
-                # if result.returncode != 0:s
-                #     print(f"exit status: {result.returncode}")
-            except FileNotFoundError:
-                print(f"{cmd}: not found (FileNotFoundError)")
-            except PermissionError:
-                print(f"{cmd}: permission denied")
-            except Exception as e:
-                print(f"{cmd}: execution failed: {e}")
-        
-        else:
-            print(f"{cmd}: command not found")
-            return True
+                os.chdir(path)
+            except OSError:
+                print(f"cd: {path}: No such file or directory")
+        case "type":
+            if not args:
+                print("type: missing operand")
+            else:
+                target = args[0]
+                builtins = {"echo", "type", "exit", "pwd", "cd"}
+                if target in builtins:
+                    print(f"{target} is a shell builtin")
+                elif (full := shutil.which(target)):
+                    print(f"{target} is {full}")
+                else:
+                    print(f"{target}: not found")
+        case _:
+            if full_path := findExe(cmd):
+                # run it safely with arguments
+                try:
+                    subprocess.run(parts)
 
-        return True
+                except Exception as e:
+                    print(f"{cmd}: execution failed: {e}")
+            
+            else:
+                print(f"{cmd}: command not found")
+    return True
 
 def findExe(exe):
     """Return full path to executable or None."""
