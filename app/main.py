@@ -57,7 +57,7 @@ def error_message():
             print("type: missing operand")
         else:
             target = parts[1]
-            builtins = {"echo", "type", "exit", "pwd"}
+            builtins = {"echo", "type", "exit", "pwd", "cd"}
             if target in builtins:
                 print(f"{target} is a shell builtin")
             elif (full := shutil.which(target)):
@@ -69,6 +69,13 @@ def error_message():
     elif cmd == "pwd":
         print(os.getcwd())
         return True
+    
+    elif cmd == "cd":
+        if len(cmd) > 1:
+            try:
+                os.chdir(cmd[1])
+            except OSError:
+                print(f"cd: {cmd[1]}: No such file or directory")
 
     else:
         # check if command is an external program
