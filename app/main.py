@@ -5,6 +5,9 @@ import readline
 import shlex
 import shutil
 import subprocess
+import io
+
+
 
 def main():
     # Setup readline once
@@ -31,61 +34,31 @@ def main():
             sys.stdout.write("\n")
             continue
 
-def handle_command():
+def execute_command(cmd, args, input_data=None):
+    """
+    Executes a command and returns its output as a string.
+    If input_data is provided, it is fed into the command's stdin.
+    """
+    output_capture = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = output_capture
+    
     try:
-        line = input("$ ").strip()
-    except EOFError:
-        print()
-        return False
-    
-    if not line:
-        return True
-    
-    # Check for Pipe
-    if "|" in line:
-        # Split into two commands
-        cmd_parts = [p.strip() for p in line.split("|")]
-        if len(cmd_parts) == 2:
-            run_pipeline(cmd_parts[0], cmd_parts[1])
-            return True   
-
-    if line == "exit 0" or line.startswith("exit"):
-        return False
-    
-    # Redirection check
-    if ">" in line or "1>" in line:
-        os.system(line)
-        return True
-
-    # parse respecting quotes
-    try:
-        parts = shlex.split(line)
-    except ValueError as e:
-        # malformed quoting
-        print(f"shell: parse error: {e}")
-        return True
-
-    cmd, *args = parts
-
-    # builtins
-    match cmd:
-        case "echo":
-            print(" ".join(args))
-        case "pwd":
-            print(os.getcwd())
-        case "cd":
-            path = args[0] if args else os.getenv("HOME")
-            if path == "~":
-                path = os.getenv("HOME")
-            try:
-                os.chdir(path)
-            except OSError:
-                print(f"cd: {path}: No such file or directory")
-        case "type":
-            if not args:
-                print("type: missing operand")
-            else:
-                target = args[0]
+        match cmd:
+            case "echo":
+                print(" ".join(args))
+            case "pwd":
+                print(os.getcwd())
+            case "cd":
+                # cd doesn't usually produce stdout or take stdin
+                path = args[0] if args else os.getenv("HOME")
+                if path == "~": path = os.getenv("HOME")
+                try:
+                    os.chdir(path)
+                except OSError:
+                    print(f"cd: {path}: No such file or directory")
+            case "type":
+                target = args[0] if args else ""
                 builtins = {"echo", "type", "exit", "pwd", "cd"}
                 if target in builtins:
                     print(f"{target} is a shell builtin")
@@ -93,17 +66,68 @@ def handle_command():
                     print(f"{target} is {full}")
                 else:
                     print(f"{target}: not found")
-        case _:
-            if full_path := findExe(cmd):
-                # run it safely with arguments
-                try:
-                    subprocess.run(parts)
+            case _:
+                # For external commands, use subprocess
+                # We reset stdout so subprocess can write to the capture buffer if needed
+                sys.stdout = old_stdout 
+                result = subprocess.run(
+                    [cmd] + args, 
+                    input=input_data, 
+                    capture_output=True, 
+                    text=True
+                )
+                return result.stdout
+                
+    finally:
+        sys.stdout = old_stdout
+        
+    return output_capture.getvalue()
 
-                except Exception as e:
-                    print(f"{cmd}: execution failed: {e}")
+def run_multi_pipeline(line):
+    # Split by pipe: ['cat file', 'grep hello', 'wc -l']
+    stages = [s.strip() for s in line.split("|")]
+    current_input = None
+
+    for i, stage in enumerate(stages):
+        parts = shlex.split(stage)
+        if not parts:
+            continue
             
+        cmd, *args = parts
+        
+        # If it's the LAST stage, we want it to print to the REAL terminal
+        if i == len(stages) - 1:
+            # Check if builtin
+            if cmd in {"echo", "pwd", "cd", "type"}:
+                # Special case: builtins don't naturally take stdin, 
+                # but we execute them normally
+                execute_command(cmd, args)
             else:
-                print(f"{cmd}: command not found")
+                # External command: feed the accumulated input
+                subprocess.run([cmd] + args, input=current_input, text=True)
+        else:
+            # Not the last stage: capture output to pass to the next stage
+            current_input = execute_command(cmd, args, input_data=current_input)
+
+def handle_command():
+    try:
+        line = input("$ ").strip()
+    except EOFError:
+        print()
+        return False
+    
+    if not line: return True
+    if line.startswith("exit"): return False
+
+    # Handle all pipelines (1, 2, or N pipes)
+    if "|" in line:
+        run_multi_pipeline(line)
+        return True
+
+    # Handle single commands
+    parts = shlex.split(line)
+    cmd, *args = parts
+    execute_command(cmd, args)
     return True
 
 def auto_complete(text, state):
