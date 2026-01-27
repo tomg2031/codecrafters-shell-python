@@ -9,8 +9,8 @@ import subprocess
 def main():
     # Setup readline once
     readline.set_completer(auto_complete)
-readline.set_completion_display_matches_hook(display_matches)
-readline.parse_and_bind("tab: complete")
+    readline.set_completion_display_matches_hook(display_matches)
+    readline.parse_and_bind("tab: complete")
     # Use 'tab: complete' for standard behavior
     if 'libedit' in readline.__doc__: 
          readline.parse_and_bind("bind ^I rl_complete")
@@ -74,7 +74,7 @@ def handle_command():
         case "pwd":
             print(os.getcwd())
         case "cd":
-            path = args[0] if args else os.getnev("HOME")
+            path = args[0] if args else os.getenv("HOME")
             if path == "~":
                 path = os.getenv("HOME")
             try:
