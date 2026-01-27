@@ -143,27 +143,45 @@ def display_matches(substitution, matches, longest_match_len):
     print(f"$ {readline.get_line_buffer()}", end="", flush=True)
 
 def run_pipeline(cmd1_str, cmd2_str):
-    try:
-        # Parse both commands respecting quotes
-        parts1 = shlex.split(cmd1_str)
-        parts2 = shlex.split(cmd2_str)
+    # Parse both commands respecting quotes
+    parts1 = shlex.split(cmd1_str)
+    parts2 = shlex.split(cmd2_str)
 
-        # Start the first process
-        # We redirect stdout so we can capture it
+    builtins = {"echo", "pwd", "type"}
+
+    if parts1[0] in builtins:
+        # Create a pipe: R = READ END W = WRITE END
+        r, w = os.pipe()
+
+        try:
+            
+            # We redirect stdout to our 'write' file temporarily
+            old_stdout = sys.stdout
+            sys.stdout = os.fdopen(w, 'w')
+            
+            # Start the first process
+            p1 = subprocess.Popen(parts1, stdout=subprocess.PIPE)
+
+            # Start the second process
+            # We take p1.stdout and use it as p2's stdin
+            p2 = subprocess.Popen(parts2, stdin=p1.stdout)
+
+            # Allow p1 to receive a SIGPIPE if p2 exits
+            p1.stdout.close() 
+            sys.stdout = old_stdout
+            # Wait for the final command to finish
+            subprocess.run(parts2, stdin=r)
+            os.close(r)
+
+        except Exception as e:
+            sys.stdout = old_stdout
+            print(f"pipeline error: {e}")
+    else:
+        # Standard external-to-external pipeline
         p1 = subprocess.Popen(parts1, stdout=subprocess.PIPE)
-
-        # Start the second process
-        # We take p1.stdout and use it as p2's stdin
         p2 = subprocess.Popen(parts2, stdin=p1.stdout)
-
-        # Allow p1 to receive a SIGPIPE if p2 exits
-        p1.stdout.close() 
-        
-        # Wait for the final command to finish
+        p1.stdout.close()
         p2.communicate()
-
-    except Exception as e:
-        print(f"pipeline error: {e}")
 
 def findExe(exe):
     """Return full path to executable or None."""
