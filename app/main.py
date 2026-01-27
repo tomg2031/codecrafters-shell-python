@@ -9,6 +9,8 @@ import subprocess
 def main():
     # Setup readline once
     readline.set_completer(auto_complete)
+    readline.set_completion_display_matches_hook(display_matches)
+    readline.parse_and_bind("tab: complete")
     # Use 'tab: complete' for standard behavior
     if 'libedit' in readline.__doc__: 
          readline.parse_and_bind("bind ^I rl_complete")
@@ -110,16 +112,26 @@ def auto_complete(text, state):
             except Exception:
                 continue
 
-    # Sort them so 'state' indexing is consistent
-    matches = sorted(list(commands))
-    
-    # Filter by the current input 'text'
-    results = [m for m in matches if m.startswith(text)]
-    
-    if state < len(results):
-        # Add the trailing space for the tester
-        return results[state] + " "
+    matches = sorted([c for c in commands if c.startswith(text)])
+
+    if state < len(matches):
+        # If it's a unique match, add a space
+        if len(matches) == 1:
+            return matches[state] + " "
+        # Otherwise, return the match without a space so user can keep typing
+        return matches[state]
     return None
+
+def display_matches(substitution, matches, longest_match_len):
+    """
+    This hook is called when the user presses TAB twice.
+    It prints the possibilities on a new line.
+    """
+    print() # Move to new line
+    # Print matches separated by two spaces (standard shell style)
+    print("  ".join(matches))
+    # Re-print the prompt and current line content
+    print(f"$ {readline.get_line_buffer()}", end="", flush=True)
 
 def findExe(exe):
     """Return full path to executable or None."""
