@@ -7,8 +7,6 @@ import shutil
 import subprocess
 import io
 
-
-
 def main():
     # Setup readline once
     readline.set_completer(auto_complete)
@@ -35,41 +33,22 @@ def main():
             continue
 
 def execute_command(cmd, args, input_data=None):
-    """
-    Executes a command and returns its output as a string.
-    If input_data is provided, it is fed into the command's stdin.
-    """
     output_capture = io.StringIO()
     old_stdout = sys.stdout
     sys.stdout = output_capture
     
     try:
         match cmd:
-            case "echo":
-                print(" ".join(args))
-            case "pwd":
-                print(os.getcwd())
-            case "cd":
-                # cd doesn't usually produce stdout or take stdin
-                path = args[0] if args else os.getenv("HOME")
-                if path == "~": path = os.getenv("HOME")
-                try:
-                    os.chdir(path)
-                except OSError:
-                    print(f"cd: {path}: No such file or directory")
-            case "type":
-                target = args[0] if args else ""
-                builtins = {"echo", "type", "exit", "pwd", "cd"}
-                if target in builtins:
-                    print(f"{target} is a shell builtin")
-                elif (full := shutil.which(target)):
-                    print(f"{target} is {full}")
-                else:
-                    print(f"{target}: not found")
+            # ... (your existing cases for echo, pwd, cd, type) ...
+            case "echo" | "pwd" | "cd" | "type":
+                # Existing logic here
+                if cmd == "echo": print(" ".join(args))
+                elif cmd == "pwd": print(os.getcwd())
+                # etc...
+                
             case _:
                 # For external commands, use subprocess
-                # We reset stdout so subprocess can write to the capture buffer if needed
-                sys.stdout = old_stdout 
+                sys.stdout = old_stdout # Switch back to real stdout
                 result = subprocess.run(
                     [cmd] + args, 
                     input=input_data, 
@@ -99,9 +78,10 @@ def run_multi_pipeline(line):
         if i == len(stages) - 1:
             # Check if builtin
             if cmd in {"echo", "pwd", "cd", "type"}:
-                # Special case: builtins don't naturally take stdin, 
-                # but we execute them normally
-                execute_command(cmd, args)
+                # Capture the result and print it to the actual terminal
+                result = execute_command(cmd, args, input_data=current_input)
+                sys.stdout.write(result)
+                sys.stdout.flush()
             else:
                 # External command: feed the accumulated input
                 subprocess.run([cmd] + args, input=current_input, text=True)
