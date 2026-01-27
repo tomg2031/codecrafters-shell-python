@@ -11,7 +11,6 @@ def main():
     # print("PYTHON PATH:", os.environ.get("PATH"))
     # print("shutil.which('codecrafters') ->", shutil.which("codecrafters"))
 
-
     while True:
         try:
             # prompt
@@ -99,8 +98,28 @@ def handle_command():
     return True
 
 def auto_complete(text, state):
+    # Gather Builtins
     builtin = {"echo ", "type ", "exit ", "pwd ", "cd "}
+
+    # Gather Executables from PATH
+    commands = set(builtin) # Use a set to avoid duplicates
+    path_env = os.environ.get("PATH", "")
+
+    for directory in path_env.split(os.pathsep):
+        if os.path.isdir(directory):
+            try:
+                for filename in os.listdir(directory):
+                    # Check if it starts with text and is executable
+                    if filename.startswith(text):
+                        full_path = os.path.join(directory, filename)
+                        if os.access(full_path, os.X_OK):
+                            commands.add(filename)
+            except PermissionError:
+                continue 
+
     matches = [cmd for cmd in builtin if cmd.startswith(text)]
+
+    # Standard readline behavior: return the match for the current space
     return matches[state] if state < len(matches) else None
 
 def findExe(exe):
