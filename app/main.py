@@ -97,12 +97,11 @@ def handle_command():
 
 def auto_complete(text, state):
     # Gather Builtins
-    builtin = {"echo ", "type ", "exit ", "pwd ", "cd "}
-
+    builtin = ["echo", "type", "exit", "pwd", "cd"]
     # Gather Executables from PATH
     commands = set(builtin) # Use a set to avoid duplicates
-    path_env = os.environ.get("PATH", "")
 
+    path_env = os.environ.get("PATH", "")
     for directory in path_env.split(os.pathsep):
         if os.path.isdir(directory):
             try:
@@ -118,7 +117,7 @@ def auto_complete(text, state):
     matches = [cmd for cmd in builtin if cmd.startswith(text)]
 
     # Standard readline behavior: return the match for the current space
-    return matches[state] if state < len(matches) else None
+    return matches[state] + " " if state < len(matches) else None
 
 def findExe(exe):
     """Return full path to executable or None."""
