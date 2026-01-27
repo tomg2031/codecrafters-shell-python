@@ -9,8 +9,8 @@ import subprocess
 def main():
     # Setup readline once
     readline.set_completer(auto_complete)
-    readline.set_completion_display_matches_hook(display_matches)
-    readline.parse_and_bind("tab: complete")
+readline.set_completion_display_matches_hook(display_matches)
+readline.parse_and_bind("tab: complete")
     # Use 'tab: complete' for standard behavior
     if 'libedit' in readline.__doc__: 
          readline.parse_and_bind("bind ^I rl_complete")
@@ -40,6 +40,15 @@ def handle_command():
     
     if not line:
         return True
+    
+    # Check for Pipe
+    if "|" in line:
+        # Split into two commands
+        cmd_parts = [p.strip() for p in line.split("|")]
+        if len(cmd_parts) == 2:
+            run_pipeline(cmd_parts[0], cmd_parts[1])
+            return True   
+
     if line == "exit 0" or line.startswith("exit"):
         return False
     
@@ -132,6 +141,29 @@ def display_matches(substitution, matches, longest_match_len):
     print("  ".join(matches))
     # Re-print the prompt and current line content
     print(f"$ {readline.get_line_buffer()}", end="", flush=True)
+
+def run_pipeline(cmd1_str, cmd2_str):
+    try:
+        # Parse both commands respecting quotes
+        parts1 = shlex.split(cmd1_str)
+        parts2 = shlex.split(cmd2_str)
+
+        # Start the first process
+        # We redirect stdout so we can capture it
+        p1 = subprocess.Popen(parts1, stdout=subprocess.PIPE)
+
+        # Start the second process
+        # We take p1.stdout and use it as p2's stdin
+        p2 = subprocess.Popen(parts2, stdin=p1.stdout)
+
+        # Allow p1 to receive a SIGPIPE if p2 exits
+        p1.stdout.close() 
+        
+        # Wait for the final command to finish
+        p2.communicate()
+
+    except Exception as e:
+        print(f"pipeline error: {e}")
 
 def findExe(exe):
     """Return full path to executable or None."""
