@@ -1,324 +1,219 @@
-import os
-import sys
+import contextlib
+import io
+import shlex
+import shutil
 import subprocess
-import copy
+import sys
+from functools import partial
+from io import TextIOWrapper
+from pathlib import Path
+import os
+from subprocess import Popen
+from typing import TextIO
+
 import readline
-from contextlib import redirect_stdout
 
-from typing import Callable, Any
+BUILTINS = {
+    "exit": lambda code=0, *_: exit(int(code)),
+    "echo": lambda *args: print(" ".join(args)),
+    "type": lambda cmd, *_: type_command(cmd),
+    "pwd": lambda *_: print(Path.cwd()),
+    "cd": lambda directory, *_: cd(directory)
+}
 
+def type_command(cmd):
+    if cmd in BUILTINS:
+        print(f"{cmd} is a shell builtin")
+    elif path := shutil.which(cmd):
+        print(f"{cmd} is {path}")
+    else:
+        print(f"{cmd}: not found", file=sys.stderr)
 
-class Shell:
-    _builtins: dict[str, Callable] = {}
-    _executables: dict[str, str] = {}
-    _path: list[str] = []
+def cd(directory):
+    directory = directory.replace("~", str(Path.home()))
 
-    def __init__(self):
-        self.getExecutables()
-        self._path = os.getcwd().split(os.sep)
+    try:
+        os.chdir(directory)
+    except FileNotFoundError:
+        print(f"cd: {directory}: No such file or directory", file=sys.stderr)
 
-    def register(self, name: str, fn: Callable):
-        self._builtins[name.lower()] = fn
-
-    def _execute_inner(self, command: str, args: list[str],outfile=None,errfile=None) -> Any:
-        try:
-            if command in self._builtins:
-                if outfile is not None:
-                    with redirect_stdout(outfile):
-                        self._builtins[command](args)
-                else:
-                    self._builtins[command](args)
-
-            elif command in self._executables:
-                self._builtins["executable"](command, args,outfile,errfile)
-
-            else:
-                print(f"{command}: command not found", file=sys.stderr)
-
-        except Exception as e:
-                print(e,file=sys.stderr)
-
-
-    def execute(self, command: str, args: list[str]) -> Any:
-        # Prioritize builtins over executables
-        outfile = None
-        errfile = None
-        appendFile = False
-
-        REDIRECTS = {">", ">>", "1>", "1>>", "2>", "2>>"}
-
-        for arg in args:
-           if arg in REDIRECTS:
-            if ">" in args:
-                i = args.index(">")
-                outfile = args[i + 1]
-            elif "1>" in args:
-                i = args.index("1>")
-                outfile = args[i + 1]
-            elif ">>" in args:
-                i = args.index(">>")
-                outfile = args[i + 1]    
-                appendFile = True
-            elif "1>>" in args:
-                i = args.index("1>>")
-                outfile = args[i + 1]
-                appendFile = True
-            elif "2>>" in args:
-                i = args.index("2>>")
-                errfile = args[i+1]
-                appendFile = True
-            else:
-                i = args.index("2>")
-                errfile = args[i + 1]
-            args = args[:i]  
-
-        if outfile is not None:
-            os.makedirs(os.path.dirname(outfile) or ".", exist_ok=True)
-
-            if appendFile:
-                outfile = open(outfile, "a")   
-            else:
-                outfile = open(outfile, "w")   
-
-
-        if errfile is not None:
-            os.makedirs(os.path.dirname(errfile) or ".", exist_ok=True)
-            
-            if appendFile:
-                errfile = open(errfile, "a")   
-            else:
-                errfile = open(errfile, "w")
-
-        self._execute_inner(command, args,outfile,errfile)
-
-
-
-    def getExecutables(self):
-        directories: list[str] = os.environ["PATH"].split(os.pathsep)
-        for directory in directories:
-            if not os.path.exists(directory):
-                continue
-            for file in os.scandir(directory):
-                if (
-                    file.is_file()
-                    and os.access(directory + os.sep + file.name, os.X_OK)
-                    and file.name not in self._executables
-                ):
-                    self._executables[file.name] = directory + os.sep + file.name
-    
-    last_text = ""
-    count = 0
-
-    def split_pipeline(self,tokens):
-        pipe_index = tokens.index("|")
-        return tokens[:pipe_index], tokens[pipe_index+1:]
-
-    def execute_pipeline(self,tokens):
-        left, right =  self.split_pipeline(tokens)
-
-        r, w = os.pipe()
-        pid1 = os.fork()
-
-        if pid1 == 0:
-            os.dup2(w,1)
-            os.close(r)
-            os.close(w)
-
-            if left[0] in self._builtins:
-                self._builtins[left[0]](left[1:])
-                sys.exit(0)
-            else:
-                os.execvp(left[0],left)
-            sys.exit(1)
-
-        pid2 = os.fork()
-        if pid2 ==0:
-            os.dup2(r,0)
-            os.close(w)
-            os.close(r)
-
-            if right[0] in self._builtins:
-                self._builtins[right[0]](right[1:])
-                sys.exit(0)
-            else:
-                os.execvp(right[0],right)
-            sys.exit(1)
-
-        os.close(r)
-        os.close(w)
-
-        os.waitpid(pid1,0)
-        os.waitpid(pid2,0)
-
-    def completer(self, text, state):
-
-        commands = sorted(
-            set(self._builtins.keys()) | set(self._executables.keys())
-        )
-
-        matches = [cmd for cmd in commands if cmd.startswith(text)]
-        
-        # FIX 1: Use self.last_text and self.count
-        if self.last_text != text:
-            self.count = 0 
-            self.last_text = text
-
-        if state == 0 and len(matches) > 1 :
-            # FIX 2: Use self.count
-            if self.count == 0:
-                if all(match.startswith(matches[0]) for match in matches[1:]):
-                    return matches[0]
-                
-                sys.stdout.write("\a")
-                self.count += 1  # FIX 3: Increment self.count
-                return None
-            else:
-                print("\n" + "  ".join(matches))   
-                sys.stdout.write("$ {}".format(text))
-                sys.stdout.flush()
-                return text
-            
-        if state < len(matches):
-            return matches[state] + " "
-        sys.stdout.write("\a")
-        return None
-
-
-SHELL: Shell = Shell()
-readline.set_completer(SHELL.completer)
-readline.parse_and_bind("tab: complete")
-PLATFORM: str = ""
-if sys.platform.startswith("win"):
-    PLATFORM = "win"
-elif sys.platform.startswith("linux"):
-    PLATFORM = "lin"
-else:
-    PLATFORM = "mac"
-
-
-def parse_command(command: str) -> list[str]:
-    escaped = False
-    quoted = False
-    single_escape = False
-    current = []
-    parts = []
-    for c in command:
-        if single_escape:
-            if quoted and (c != "\\" and c != '"'):
-                current.append("\\")
-            current.append(c)
-            single_escape = False
-        elif c == "\\" and not escaped:
-            single_escape = True
-        elif c == "'" and not quoted:
-            escaped = not escaped
-        elif c == '"' and not escaped:
-            quoted = not quoted
-        elif c == " " and not (escaped or quoted):
-            if len(current) > 0:
-                parts.append("".join(current))
-                current = []
-        else:
-            current.append(c)
-    if len(current) > 0:
-        parts.append("".join(current))
-    return parts
-
-
-def command(name: str) -> Callable:
-    global SHELL
-
-    def wrapper(fn: Callable) -> Callable:
-        SHELL.register(name, fn)
-        return fn
-
-    return wrapper
-
-def execute(cmd: str) -> Any:
-    global SHELL
-    cmds: list[str] = parse_command(cmd)
-    if not cmds: # Added safety check for empty input
+def handle_command(cmd, stdout=sys.stdout, stdin=sys.stdin) -> Popen[str] | None:
+    if not cmd:
         return
-    if "|" in cmds:
-         SHELL.execute_pipeline(cmds)
+    args = cmd[1:]
+    if cmd[0] in BUILTINS:
+        BUILTINS[cmd[0]](*args)
+    elif path := shutil.which(cmd[0]):
+        p = subprocess.run(cmd, stdout=stdout, stderr=sys.stderr)
+        return p
     else:
-         SHELL.execute(cmds[0],cmds[1:])
+        print(f"{cmd[0]}: command not found", file=sys.stderr)
 
-@command("exit")
-def _exit(args: list[str]) -> None:
-    if not args:
-        exit(0)
-    exit(int(args[0]))
+    return None
 
+def parse_command(unparsed_command):
+    commands = unparsed_command.split("|")
+    tokens = []
+    for i in commands:
+        tokens.append(shlex.split(i, posix=True))
 
-@command("echo")
-def _echo(args: list[str]) -> None:
-    print(" ".join(args))
+    return tokens
 
+class BuiltInCompleter:
+    def __init__(self, builtins, executables):
+        self.completions = sorted(list(set(builtins + executables)))
+        self.last_tab_text = ""
+        self.matches = []
+        self.last_tab_count = 0
 
-@command("type")
-def _type(args: list[str]) -> None:
-    if args[0] in SHELL._builtins:
-        print(f"{args[0]} is a shell builtin")
-    elif args[0] in SHELL._executables:
-        print(f"{args[0]} is {SHELL._executables[args[0]]}")
-    else:
-        print(f"{args[0]}: not found")
+    def complete(self, text: str, state: int) -> str | None:
+        line = readline.get_line_buffer()
 
+        if line.strip() and " " in line.lstrip():
+            # If there is a space, we are not completing the command except for trailing spaces
+            return None
 
-@command("executable")
-def _executable(cmd: str, args: list[str],outfile=None,errfile=None) -> None:
-        
-        subprocess.run(
-                [cmd, *args],
-                stdout=outfile,
-                stderr=errfile,
-                check=False
-            )
+        if text != self.last_tab_text and state == 0:
+            # Text changed, reset matches
+            # print(f"resetting matches '{text}':'{self.last_tab_text}'")
+            self.last_tab_text = text
+            self.matches = [cmd + " " for cmd in self.completions if cmd.startswith(text)]
+            self.last_tab_count = 0
 
-@command("pwd")
-def _pwd(args: list[str]) -> None:
-    print(os.sep.join(SHELL._path))
+        if len(self.matches) == 1:
+            # If there is only one match, return it
+            if state == 0:
+                return self.matches[0]
+            return None
+        elif len(self.matches) == 0:
+            # If there are no matches, beep and return None
+            print("\a", end="", flush=True)  # Beep sound for no match
+            return None
+        elif self.last_tab_count == 0:
+            # If this is the first tab press (and there are multiple matches), beep
+            self.last_tab_count += 1
+            print("\a", end="", flush=True)  # Beep sound for multiple matches
 
+            if state == 0:
+                partial_completion = text
+                index = len(partial_completion)
 
-@command("cd")
-def _cd(args: list[str]) -> None:
-    cmds: list[str] = args[0].split(os.sep)
-    temp: list[str] = copy.deepcopy(SHELL._path)
-    if PLATFORM == "win" and cmds[0].endswith(":"):
-        temp = []
-    elif not cmds[0]:
-        temp = [""]
+                for idx, char in enumerate(min(self.matches, key=len)[index:]):
+                    if all(m[idx + index] == char for m in self.matches):
+                        partial_completion += char
+                    else:
+                        break
 
-    for dir in cmds:
-        if not dir:
-            continue
-        elif dir == ".":
-            continue
-        elif dir == "..":
-            if len(temp) <= 1:
-                print(f"cd: {args[0]}: No such file or directory")
-                return
-            temp.pop()
-        elif dir == "~":
-            temp = os.getenv("HOME").split(os.sep)
+                if partial_completion != text:
+                    self.last_tab_text = partial_completion
+                    return partial_completion
+
+            return None
+        elif state == 0 and self.last_tab_count == 1:
+            # If this is the second tab press, print all matches
+            print()
+            print(" ".join(self.matches))
+            print(f"$ {text}", end="", flush=True)
+            self.last_tab_count += 1
+            return text
         else:
-            temp.append(dir)
-            if not os.path.isdir(os.sep.join(temp)):
-                print(f"cd: {args[0]}: No such file or directory")
-                return
-    SHELL._path = temp
+            # If this is a subsequent tab press and nothing changed, don't complete it again
+            return None
+
+def hande_redirects(command):
+    redirect_out = None
+    redirect_err = None
+    if ">" in command or "1>" in command:
+        output_file = command[-1]
+        redirect_out = open(output_file, "w")
+    elif "2>" in command:
+        error_file = command[-1]
+        redirect_err = open(error_file, "w")
+    elif ">>" in command or "1>>" in command:
+        output_file = command[-1]
+        redirect_out = open(output_file, "a")
+    elif "2>>" in command:
+        error_file = command[-1]
+        redirect_err = open(error_file, "a")
+
+    return redirect_out, redirect_err
+
+def handle_pipeline(commands_list):
+    processes = []
+    prev_pipe = None
+    orig_stdout = sys.stdout
+
+    for i, cmd in enumerate(commands_list):
+        cmd_parts = shlex.split(cmd)
+        if not cmd_parts:
+            continue
+
+        if i == len(commands_list) - 1:
+            pipe_w = None
+            sys.stdout = orig_stdout
+        else:
+            pipe_r, pipe_w = os.pipe()
+            sys.stdout = os.fdopen(pipe_w, "w")
+
+        if cmd_parts[0] in BUILTINS:
+            # Handle built-in commands
+            BUILTINS[cmd_parts[0]](*cmd_parts[1:])
+        elif shutil.which(cmd_parts[0]):
+            process = subprocess.Popen(cmd_parts, stdin=prev_pipe, stdout=sys.stdout, stderr=sys.stderr)
+            processes.append(process)
+        else:
+            print(f"{cmd_parts[0]}: command not found", file=sys.stderr)
+
+        if prev_pipe is not None:
+            os.close(prev_pipe)
+        if i != len(commands_list) - 1:
+            sys.stdout.close()  # This closes pipe_w
+
+        prev_pipe = pipe_r
+    for process in processes:
+        process.wait()
+
+
+def dispatch_command(command):
+    cmd = parse_command(command)
+
+    out, err = hande_redirects(cmd[-1])
+    orig_out, orig_err = sys.stdout, sys.stderr
+    if out:
+        sys.stdout = out
+        cmd[-1] = cmd[-1][:-2]
+    elif err:
+        sys.stderr = err
+        cmd[-1] = cmd[-1][:-2]
+
+    if len(cmd) == 1:
+        handle_command(cmd[0], stdout=out, stdin=sys.stdin)
+    else:
+        handle_pipeline(command.split("|"))
+
+    if out:
+        sys.stdout.close()
+    elif err:
+        sys.stderr.close()
+    sys.stdout, sys.stderr = orig_out, orig_err
 
 
 def main():
+    path = os.getenv("PATH").split(":")
+    executables = []
+    for directory in path:
+        if not os.path.isdir(directory):
+            continue
+        executables.extend([file for file in os.listdir(directory)])
+
+    readline.set_completer(BuiltInCompleter(list(BUILTINS.keys()), executables).complete)
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer_delims("  ")
+
+    sys.stderr = sys.stdout
     while True:
-        try:
-            execute(input("$ "))
-        except EOFError: # Handles Ctrl+D gracefully
-            print()
-            break
-        except KeyboardInterrupt: # Handles Ctrl+C gracefully
-            print()
+        command = input("$ ")
+        dispatch_command(command)
 
 
 if __name__ == "__main__":
