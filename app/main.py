@@ -96,28 +96,30 @@ def handle_command():
     return True
 
 def auto_complete(text, state):
-    # Gather Builtins
-    builtin = ["echo", "type", "exit", "pwd", "cd"]
-    # Gather Executables from PATH
-    commands = set(builtin) # Use a set to avoid duplicates
-
+    # Get all potential commands
+    builtins = ["echo", "type", "exit", "pwd", "cd"]
+    commands = set(builtins)
+    
     path_env = os.environ.get("PATH", "")
     for directory in path_env.split(os.pathsep):
         if os.path.isdir(directory):
             try:
                 for filename in os.listdir(directory):
-                    # Check if it starts with text and is executable
                     if filename.startswith(text):
-                        full_path = os.path.join(directory, filename)
-                        if os.access(full_path, os.X_OK):
-                            commands.add(filename)
-            except PermissionError:
-                continue 
+                        commands.add(filename)
+            except Exception:
+                continue
 
-    matches = [cmd for cmd in builtin if cmd.startswith(text)]
-
-    # Standard readline behavior: return the match for the current space
-    return matches[state] + " " if state < len(matches) else None
+    # Sort them so 'state' indexing is consistent
+    matches = sorted(list(commands))
+    
+    # Filter by the current input 'text'
+    results = [m for m in matches if m.startswith(text)]
+    
+    if state < len(results):
+        # Add the trailing space for the tester
+        return results[state] + " "
+    return None
 
 def findExe(exe):
     """Return full path to executable or None."""
