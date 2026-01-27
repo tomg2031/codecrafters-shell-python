@@ -7,18 +7,16 @@ import shutil
 import subprocess
 
 def main():
-
-    # print("PYTHON PATH:", os.environ.get("PATH"))
-    # print("shutil.which('codecrafters') ->", shutil.which("codecrafters"))
+    # Setup readline once
+    readline.set_completer(auto_complete)
+    # Use 'tab: complete' for standard behavior
+    if 'libedit' in readline.__doc__: 
+         readline.parse_and_bind("bind ^I rl_complete")
+    else:
+         readline.parse_and_bind("tab: complete")
 
     while True:
         try:
-            # prompt
-            sys.stdout.write("$ ")
-            sys.stdout.flush()
-            readline.set_completer(auto_complete)
-            readline.parse_and_bind("tab: complete")
-
             if not handle_command():
                 break  # exit requested
 
@@ -33,7 +31,7 @@ def main():
 
 def handle_command():
     try:
-        line = input().strip()
+        line = input("$ ").strip()
     except EOFError:
         print()
         return False
