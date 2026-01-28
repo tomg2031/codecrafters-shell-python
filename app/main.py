@@ -7,7 +7,7 @@ built_in_commands = {
     "exit": lambda _ : sys.exit(0),
     "pwd": lambda _ : print(os.getcwd()),
     "cd": lambda path: os.chdir(os.getenv("HOME")) if path=="~" else os.chdir(path) if os.path.isdir(path) else print(f"cd: {path}: No such file or directory"),
-    "history": ""
+    "history": lambda cmd: print(inputHistory(cmd)),
 }
 
 def parse_args(shell_input: str):
@@ -127,6 +127,21 @@ def handle_pipeline(command_line):
     # Wait for all children
     for pid in pids:
         os.waitpid(pid, 0)
+        
+def inputHistory(args):
+    result = ""
+    end = readline.get_current_history_length()
+    if not args:
+        start = 0
+    elif len(args) == 1 and args[0].isdigit():
+        n = int(args[0])
+        start = end - n if n > 0 and n < end else 0
+    else:
+        return "", "unexpected arguement"
+    for i in range(start, end + 1):
+        cmd = readline.get_history_item(i)
+        result += f"    {i}  {cmd}\n" if cmd else ""
+    return result, ""
 
 def main():
     while True:
