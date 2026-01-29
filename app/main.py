@@ -30,15 +30,17 @@ def handle_history_command(args):
         print(inputHistory(args)[0], end="")
 
 def append_history(file_path):
+    global last_appended_index
     try:
         path = os.path.expanduser(file_path.strip())
-        
-        # This appends only the NEW items from this session 
-        # to the file. If the file doesn't exist, it creates it.
-        # We pass the number of items to append. 
-        # Using the current history length ensures everything is captured.
         nelements = readline.get_current_history_length()
-        readline.append_history_file(nelements, path)
+        # Calculate how many new items there are since the last -a call
+        new_items_count = nelements - last_appended_index
+
+        if new_items_count > 0:
+            readline.append_history_file(nelements, path)
+            #Update watermark so no redundancy
+            last_appended_index = nelements
         
     except Exception as e:
         print(f"history: -a: {e}")
