@@ -27,6 +27,17 @@ ACTIVE_HIST_FILE = None
 last_appended_index = 0
 
 # --- History Management ---
+def load_history_at_startup():
+    global ACTIVE_HIST_FILE, last_appended_index
+    ACTIVE_HIST_FILE = get_history_file_path()
+    if ACTIVE_HIST_FILE and os.path.exists(ACTIVE_HIST_FILE):
+        try:
+            readline.read_history_file(ACTIVE_HIST_FILE)
+        except Exception:
+            pass 
+    # Synchronize the watermark immediately after loading
+    last_appended_index = readline.get_current_history_length()
+    
 def get_history_file_path():
     env_hist = os.getenv("HISTFILE")
     if env_hist:
