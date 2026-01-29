@@ -203,6 +203,7 @@ def load_history(file_path):
         print(f"history: -r: {file_path}: No such file or directory")
 
 def main():
+    global last_appended_index
     while True:
         command = input("$ ")
         if not command.strip():
