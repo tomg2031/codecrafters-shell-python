@@ -220,7 +220,6 @@ def main():
             print(f"Error loading history: {e}")
 
     # Synchronize the append watermark after loading
-    global last_appended_index
     last_appended_index = readline.get_current_history_length()
 
     # Save history automatically when the script exits
