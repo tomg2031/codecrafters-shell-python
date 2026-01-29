@@ -7,8 +7,17 @@ built_in_commands = {
     "exit": lambda _ : sys.exit(0),
     "pwd": lambda _ : print(os.getcwd()),
     "cd": lambda path: os.chdir(os.getenv("HOME")) if path=="~" else os.chdir(path) if os.path.isdir(path) else print(f"cd: {path}: No such file or directory"),
-    "history": lambda cmd: print(inputHistory(cmd)[0], end=""),
+    # Updated history command to check for -r flag
+    "history": lambda args: handle_history_command(args),
 }
+
+def handle_history_command(args):
+    if args and args.startswith("-r "):
+        file_path = args.split("-r ", 1)[1]
+        load_history(file_path)
+    else:
+        # Existing logic for listing history
+        print(inputHistory(args)[0], end="")
 
 def parse_args(shell_input: str):
     shell_input_list = shlex.split(shell_input)
@@ -149,6 +158,21 @@ def inputHistory(args):
             result += f"  {i}  {cmd}\n"
             
     return result, ""
+
+def load_history(file_path):
+    try:
+        # Resolve ~ if the user provides a home path
+        expanded_path = os.path.expanduser(file_path.strip())
+        with open(expanded_path, "r") as file:
+            for line in file:
+                # Use rstrip() as requested to clean the line
+                cleaned_line = line.rstrip()
+                if cleaned_line:  # Avoid adding empty lines to history
+                    readline.add_history(cleaned_line)
+    except FileNotFoundError:
+        print(f"history: {file_path}: No such file or directory")
+    except Exception as e:
+        print(f"history: error loading file: {e}")
 
 def main():
     while True:
