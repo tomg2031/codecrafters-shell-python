@@ -223,8 +223,8 @@ def main():
     last_appended_index = readline.get_current_history_length()
 
     # Save history automatically when the script exits
-    import atexit
-    atexit.register(save_on_exit)
+    # import atexit
+    # atexit.register(save_on_exit)
 
     while True:
         command = input("$ ")
