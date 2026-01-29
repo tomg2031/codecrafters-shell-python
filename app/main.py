@@ -1,5 +1,6 @@
 import sys, shutil, subprocess, os, shlex, readline
 
+HIST_FILE = os.path.expanduser("~/.gemini_shell_history")
 last_appended_index = 0
 a = shutil.which
 built_in_commands = {
@@ -211,6 +212,21 @@ def load_history(file_path):
 def main():
     global last_appended_index
     last_appended_index = readline.get_current_history_length()
+
+    if os.path.exists(HIST_FILE):
+        try:
+            readline.read_history_file(HIST_FILE)
+        except Exception as e:
+            print(f"Error loading history: {e}")
+
+    # Synchronize the append watermark after loading
+    global last_appended_index
+    last_appended_index = readline.get_current_history_length()
+
+    # Save history automatically when the script exits
+    import atexit
+    atexit.register(save_on_exit)
+
     while True:
         command = input("$ ")
         if not command.strip():
