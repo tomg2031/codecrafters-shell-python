@@ -1,17 +1,27 @@
 import sys, shutil, subprocess, os, shlex, readline
 
 HIST_FILE = os.path.expanduser("~/.gemini_shell_history")
+ACTIVE_HIST_FILE = None
 last_appended_index = 0
 a = shutil.which
 built_in_commands = {
     "echo": print,
     "type": lambda cmd: print(f"{cmd} is a shell builtin" if cmd in built_in_commands else f"{cmd} is {a(cmd)}" if a(cmd) else f"{cmd}: not found"),
-    "exit": lambda _ : sys.exit(0),
+    "exit": lambda _ : handle_exit(),
     "pwd": lambda _ : print(os.getcwd()),
     "cd": lambda path: os.chdir(os.getenv("HOME")) if path=="~" else os.chdir(path) if os.path.isdir(path) else print(f"cd: {path}: No such file or directory"),
     # Updated history command to check for -r flag
     "history": lambda args: handle_history_command(args),
 }
+
+def handle_exit():
+    global ACTIVE_HIST_FILE
+    if ACTIVE_HIST_FILE:
+        try: 
+            readline.write_history_file(ACTIVE_HIST_FILE)
+        except Exception:
+            pass
+    sys.exit(0)
 
 def handle_history_command(args):
     if not args:
@@ -210,22 +220,21 @@ def load_history(file_path):
         print(f"history: -r: {file_path}: No such file or directory")
 
 def main():
-    global last_appended_index
+    global last_appended_index, ACTIVE_HIST_FILE
 
-    # Determine the correct history file path
-    hist_file = os.getenv("HISTFILE")
-    if hist_file:
-        hist_file = os.path.expanduser(hist_file)
+    # 1. Determine the correct history file path
+    env_hist = os.getenv("HISTFILE")
+    if env_hist:
+        ACTIVE_HIST_FILE = os.path.expanduser(env_hist)
     else:
-        hist_file = os.path.expanduser("~/.gemini_shell_history")
+        ACTIVE_HIST_FILE = os.path.expanduser("~/.gemini_shell_history")
     
-    # Load the history from that file
-    if hist_file and os.path.exists(hist_file):
+    # 2. Load the history from the discovered path
+    if ACTIVE_HIST_FILE and os.path.exists(ACTIVE_HIST_FILE):
         try:
-            readline.read_history_file(hist_file)
+            readline.read_history_file(ACTIVE_HIST_FILE)
         except Exception:
-            pass # Silently fail if file is unreadable
-
+            pass
     last_appended_index = readline.get_current_history_length()
 
     if os.path.exists(HIST_FILE):
