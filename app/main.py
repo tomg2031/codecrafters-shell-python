@@ -186,18 +186,11 @@ def inputHistory(args):
 
 def load_history(file_path):
     try:
-        # Resolve ~ if the user provides a home path
-        expanded_path = os.path.expanduser(file_path.strip())
-        with open(expanded_path, "r") as file:
-            for line in file:
-                # Use rstrip() as requested to clean the line
-                cleaned_line = line.rstrip()
-                if cleaned_line:  # Avoid adding empty lines to history
-                    readline.add_history(cleaned_line)
+        path = os.path.expanduser(file_path.strip())
+        # This appends the file content to the current session history
+        readline.read_history_file(path)
     except FileNotFoundError:
-        print(f"history: {file_path}: No such file or directory")
-    except Exception as e:
-        print(f"history: error loading file: {e}")
+        print(f"history: -r: {file_path}: No such file or directory")
 
 def main():
     while True:
