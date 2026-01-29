@@ -13,27 +13,35 @@ built_in_commands = {
 
 def handle_history_command(args):
     if not args:
-        # Standard: list history
         print(inputHistory(args)[0], end="")
         return
 
-    # Split args to handle flags easily
     arg_list = args.split()
     flag = arg_list[0]
     
     if flag == "-r" and len(arg_list) > 1:
-        # Load from file
-        file_path = arg_list[1]
-        load_history(file_path)
-        
+        load_history(arg_list[1])
     elif flag == "-w" and len(arg_list) > 1:
-        # Save to file
-        file_path = arg_list[1]
-        save_history(file_path)
-        
+        save_history(arg_list[1])
+    elif flag == "-a" and len(arg_list) > 1:
+        append_history(arg_list[1])
     else:
-        # Fallback to listing history if args is just a number
+        # Default to listing history (e.g., if args is "5")
         print(inputHistory(args)[0], end="")
+
+def append_history(file_path):
+    try:
+        path = os.path.expanduser(file_path.strip())
+        
+        # This appends only the NEW items from this session 
+        # to the file. If the file doesn't exist, it creates it.
+        # We pass the number of items to append. 
+        # Using the current history length ensures everything is captured.
+        nelements = readline.get_current_history_length()
+        readline.append_history_file(nelements, path)
+        
+    except Exception as e:
+        print(f"history: -a: {e}")
 
 def save_history(file_path):
     try:
