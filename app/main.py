@@ -144,18 +144,13 @@ def inputHistory(args):
     
     # We subtract 1 because the 'history' command itself 
     # has already been added to the buffer by readline
-    display_end = end - 1
-    
-    if not args:
-        start = 1
-    elif isinstance(args, str) and args.isdigit():
+    start = 1
+    if args and str(args).isdigit():
         n = int(args)
-        start = max(1, display_end - n + 1)
-    else:
-        start = 1
+        start = max(1, end - n + 1)
 
     # Loop only up to display_end
-    for i in range(start, display_end + 1):
+    for i in range(start, end + 1):
         cmd = readline.get_history_item(i)
         if cmd:
             # The tester is strict about spacing. 
