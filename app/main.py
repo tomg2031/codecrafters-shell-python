@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import os
 import shlex
+import multiprocessing
 
 # --- Cross-Platform Readline Import ---
 try:
@@ -185,57 +186,71 @@ def handle_redirection(command, operator):
     except Exception as e:
         print(f"bash: {file_part}: {e}")
 
-import multiprocessing
+def run_piped_command(cmd_args, input_fd, output_fd):
+    """
+    Child process target.
+    input_fd: The file descriptor to read from (stdin).
+    output_fd: The file descriptor to write to (stdout).
+    """
+    try:
+        if input_fd is not None:
+            os.dup2(input_fd, sys.stdin.fileno())
+            os.close(input_fd) # Close original after duping
 
-def run_piped_command(cmd_args, input_pipe, output_pipe):
-    """Function to run in a separate process for Windows compatibility."""
-    # Redirect stdin/stdout to the provided pipes
-    if input_pipe is not None:
-        os.dup2(input_pipe, sys.stdin.fileno())
-    if output_pipe is not None:
-        os.dup2(output_pipe, sys.stdout.fileno())
+        if output_fd is not None:
+            os.dup2(output_fd, sys.stdout.fileno())
+            os.close(output_fd) # Close original after duping
 
-    # Execute the command
-    cmd_name = cmd_args[0]
-    if cmd_name in built_in_commands:
-        built_in_commands[cmd_name](" ".join(cmd_args[1:]) if len(cmd_args) > 1 else None)
-        sys.exit(0)
-    else:
-        try:
+        cmd_name = cmd_args[0]
+        if cmd_name in built_in_commands:
+            # Run builtin and exit
+            built_in_commands[cmd_name](" ".join(cmd_args[1:]) if len(cmd_args) > 1 else None)
+            sys.exit(0)
+        else:
+            # Use subprocess for external commands
+            # shell=False is safer with shlex.split results
             subprocess.run(cmd_args)
-        except Exception:
-            sys.exit(1)
+            sys.exit(0)
+    except Exception as e:
+        # Don't let exceptions hang the process
+        sys.exit(1)
 
 def handle_pipeline(command_line):
-    # Split by pipe '|'
     commands = [shlex.split(cmd.strip()) for cmd in command_line.split('|')]
     num_cmds = len(commands)
+    
     processes = []
-    pipes = []
+    # Store pipe pairs so we can manage their lifecycle
+    pipe_list = []
 
-    # Create the necessary pipes
+    # Create n-1 pipes
     for _ in range(num_cmds - 1):
-        # os.pipe() works on Windows, but the handles must be passed carefully
-        pipes.append(os.pipe())
+        pipe_list.append(os.pipe())
 
-    for i, cmd_args in enumerate(commands):
-        # Determine input and output for this specific command
-        in_p = pipes[i-1][0] if i > 0 else None
-        out_p = pipes[i][1] if i < num_cmds - 1 else None
+    for i in range(num_cmds):
+        # Determine the input/output for this command
+        # command 0: stdin = None, stdout = pipe[0] write
+        # command 1: stdin = pipe[0] read, stdout = pipe[1] write
+        # command n: stdin = pipe[n-1] read, stdout = None
+        
+        in_fd = pipe_list[i-1][0] if i > 0 else None
+        out_fd = pipe_list[i][1] if i < num_cmds - 1 else None
 
-        # Start a multiprocessing Process
         p = multiprocessing.Process(
-            target=run_piped_command, 
-            args=(cmd_args, in_p, out_p)
+            target=run_piped_command,
+            args=(commands[i], in_fd, out_fd)
         )
         p.start()
         processes.append(p)
 
-        # Close the handles in the parent process immediately after starting
-        if in_p is not None: os.close(in_p)
-        if out_p is not None: os.close(out_p)
+    # IMPORTANT: Parent MUST close all pipe ends immediately after starting processes.
+    # If the parent keeps the write-end open, the 'wc' command will wait forever
+    # because the pipe never signals EOF.
+    for r, w in pipe_list:
+        os.close(r)
+        os.close(w)
 
-    # Wait for all processes to finish
+    # Wait for the last command in the pipeline specifically
     for p in processes:
         p.join()
 
