@@ -12,12 +12,36 @@ built_in_commands = {
 }
 
 def handle_history_command(args):
-    if args and args.startswith("-r "):
-        file_path = args.split("-r ", 1)[1]
-        load_history(file_path)
-    else:
-        # Existing logic for listing history
+    if not args:
+        # Standard: list history
         print(inputHistory(args)[0], end="")
+        return
+
+    # Split args to handle flags easily
+    arg_list = args.split()
+    flag = arg_list[0]
+    
+    if flag == "-r" and len(arg_list) > 1:
+        # Load from file
+        file_path = arg_list[1]
+        load_history(file_path)
+        
+    elif flag == "-w" and len(arg_list) > 1:
+        # Save to file
+        file_path = arg_list[1]
+        save_history(file_path)
+        
+    else:
+        # Fallback to listing history if args is just a number
+        print(inputHistory(args)[0], end="")
+
+def save_history(file_path):
+    try:
+        path = os.path.expanduser(file_path.strip())
+        # Python's readline makes this very easy
+        readline.write_history_file(path)
+    except Exception as e:
+        print(f"history: -w: {e}")
 
 def parse_args(shell_input: str):
     shell_input_list = shlex.split(shell_input)
