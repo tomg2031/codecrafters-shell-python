@@ -33,15 +33,15 @@ def get_history_file_path():
         return os.path.expanduser(env_hist)
     return DEFAULT_HIST_FILE
 
-def load_history_at_startup():
-    global ACTIVE_HIST_FILE, last_appended_index
-    ACTIVE_HIST_FILE = get_history_file_path()
-    if ACTIVE_HIST_FILE and os.path.exists(ACTIVE_HIST_FILE):
-        try:
-            readline.read_history_file(ACTIVE_HIST_FILE)
-        except Exception:
-            pass 
-    last_appended_index = readline.get_current_history_length()
+def load_history(file_path):
+    global last_appended_index
+    try:
+        path = os.path.expanduser(file_path.strip())
+        readline.read_history_file(path)
+        # Crucial: update the watermark so we don't 'append' these again later
+        last_appended_index = readline.get_current_history_length()
+    except Exception as e:
+        print(f"history: -r: {e}")
 
 def save_history_session():
     if ACTIVE_HIST_FILE:
@@ -54,20 +54,16 @@ def append_history(file_path):
     global last_appended_index
     try:
         path = os.path.expanduser(file_path.strip())
-        # Current length includes the 'history -a' command itself
         current_length = readline.get_current_history_length()
         
-        # We subtract 1 to ignore the current command ('history -a ...')
-        # so it doesn't end up inside the history file.
+        # Calculate items added since the last sync, excluding this current command
         new_items_count = (current_length - 1) - last_appended_index
         
         if new_items_count > 0:
             if hasattr(readline, 'append_history_file'):
-                # Append only the commands entered BEFORE this one
                 readline.append_history_file(new_items_count, path)
             
-            # Update the watermark to current_length (including the current command)
-            # so the NEXT call to -a doesn't re-append this 'history' call.
+            # Sync watermark to the end of the buffer
             last_appended_index = current_length
     except Exception as e:
         print(f"history: -a: {e}")
