@@ -1,5 +1,6 @@
 import sys, shutil, subprocess, os, shlex, readline
 
+last_appended_index = 0
 a = shutil.which
 built_in_commands = {
     "echo": print,
@@ -30,18 +31,23 @@ def handle_history_command(args):
         print(inputHistory(args)[0], end="")
 
 def append_history(file_path):
+    # 2. Tell Python to use the global variable, not create a local one
     global last_appended_index
+    
     try:
         path = os.path.expanduser(file_path.strip())
-        nelements = readline.get_current_history_length()
-        # Calculate how many new items there are since the last -a call
-        new_items_count = nelements - last_appended_index
-
-        if new_items_count > 0:
-            readline.append_history_file(nelements, path)
-            #Update watermark so no redundancy
-            last_appended_index = nelements
+        current_length = readline.get_current_history_length()
         
+        # Calculate how many new lines exist since the last -a call
+        new_items_count = current_length - last_appended_index
+        
+        if new_items_count > 0:
+            # Writes only the most recent 'new_items_count' lines
+            readline.append_history_file(new_items_count, path)
+            
+            # Update the watermark
+            last_appended_index = current_length
+            
     except Exception as e:
         print(f"history: -a: {e}")
 
@@ -204,6 +210,7 @@ def load_history(file_path):
 
 def main():
     global last_appended_index
+    last_appended_index = readline.get_current_history_length()
     while True:
         command = input("$ ")
         if not command.strip():
