@@ -211,6 +211,21 @@ def load_history(file_path):
 
 def main():
     global last_appended_index
+
+    # Determine the correct history file path
+    hist_file = os.getenv("HISTFILE")
+    if hist_file:
+        hist_file = os.path.expanduser(hist_file)
+    else:
+        hist_file = os.path.expanduser("~/.gemini_shell_history")
+    
+    # Load the history from that file
+    if hist_file and os.path.exists(hist_file):
+        try:
+            readline.read_history_file(hist_file)
+        except Exception:
+            pass # Silently fail if file is unreadable
+
     last_appended_index = readline.get_current_history_length()
 
     if os.path.exists(HIST_FILE):
