@@ -1,4 +1,24 @@
-import sys, shutil, subprocess, os, shlex, readline
+import sys
+import shutil
+import subprocess
+import os
+import shlex
+
+# --- Cross-Platform Readline Import ---
+try:
+    import readline
+except ImportError:
+    try:
+        from pyreadline3 import Readline
+        readline = Readline()
+    except ImportError:
+        # Minimal fallback if pyreadline3 is not installed
+        class DummyReadline:
+            def __getattr__(self, name): return lambda *args, **kwargs: None
+            def get_current_history_length(self): return 0
+            def get_history_item(self, index): return None
+            def get_line_buffer(self): return ""
+        readline = DummyReadline()
 
 # --- Constants & Globals ---
 DEFAULT_HIST_FILE = os.path.expanduser("~/.gemini_shell_history")
@@ -7,7 +27,6 @@ last_appended_index = 0
 
 # --- History Management ---
 def get_history_file_path():
-    """Determines the correct history file path from env or default."""
     env_hist = os.getenv("HISTFILE")
     if env_hist:
         return os.path.expanduser(env_hist)
@@ -15,20 +34,15 @@ def get_history_file_path():
 
 def load_history_at_startup():
     global ACTIVE_HIST_FILE, last_appended_index
-    
     ACTIVE_HIST_FILE = get_history_file_path()
-    
     if ACTIVE_HIST_FILE and os.path.exists(ACTIVE_HIST_FILE):
         try:
             readline.read_history_file(ACTIVE_HIST_FILE)
         except Exception:
-            pass # Fail silently if file is unreadable
-
-    # Set the watermark so we know where the 'current session' begins
+            pass 
     last_appended_index = readline.get_current_history_length()
 
 def save_history_session():
-    """Writes the current history to the active file."""
     if ACTIVE_HIST_FILE:
         try:
             readline.write_history_file(ACTIVE_HIST_FILE)
@@ -40,12 +54,11 @@ def append_history(file_path):
     try:
         path = os.path.expanduser(file_path.strip())
         current_length = readline.get_current_history_length()
-        
-        # Calculate new lines since last append
         new_items_count = current_length - last_appended_index
-        
         if new_items_count > 0:
-            readline.append_history_file(new_items_count, path)
+            # Note: append_history_file may not be supported by all Windows emulators
+            if hasattr(readline, 'append_history_file'):
+                readline.append_history_file(new_items_count, path)
             last_appended_index = current_length
     except Exception as e:
         print(f"history: -a: {e}")
@@ -54,16 +67,14 @@ def handle_history_command(args):
     if not args:
         print(format_history_output(), end="")
         return
-
     parts = args.split()
     flag = parts[0]
     file_arg = parts[1] if len(parts) > 1 else None
-
     if flag == "-r" and file_arg:
         try:
             readline.read_history_file(os.path.expanduser(file_arg))
-        except FileNotFoundError:
-            print(f"history: -r: {file_arg}: No such file or directory")
+        except Exception as e:
+            print(f"history: -r: {file_arg}: {e}")
     elif flag == "-w" and file_arg:
         try:
             readline.write_history_file(os.path.expanduser(file_arg))
@@ -72,21 +83,17 @@ def handle_history_command(args):
     elif flag == "-a" and file_arg:
         append_history(file_arg)
     else:
-        # Fallback: interpret args as a number (e.g. "history 5")
         print(format_history_output(args), end="")
 
 def format_history_output(limit_arg=None):
     result = ""
     end = readline.get_current_history_length()
     start = 1
-    
     if limit_arg and str(limit_arg).isdigit():
         start = max(1, end - int(limit_arg) + 1)
-
     for i in range(start, end + 1):
         cmd = readline.get_history_item(i)
         if cmd:
-            # Matches standard 4-space indentation
             result += f"   {i}  {cmd}\n"
     return result
 
@@ -95,10 +102,8 @@ def builtin_cd(path):
     target = os.getenv("HOME") if path == "~" or not path else path
     try:
         os.chdir(target)
-    except FileNotFoundError:
-        print(f"cd: {target}: No such file or directory")
-    except NotADirectoryError:
-        print(f"cd: {target}: Not a directory")
+    except Exception as e:
+        print(f"cd: {target}: {e}")
 
 def builtin_type(cmd):
     if cmd in built_in_commands:
@@ -110,16 +115,12 @@ def builtin_type(cmd):
         else:
             print(f"{cmd}: not found")
 
-def builtin_exit(_):
-    save_history_session()
-    sys.exit(0)
-
 built_in_commands = {
     "echo": print,
     "pwd": lambda _: print(os.getcwd()),
     "cd": builtin_cd,
     "type": builtin_type,
-    "exit": builtin_exit,
+    "exit": lambda _: (save_history_session(), sys.exit(0)),
     "history": handle_history_command,
 }
 
@@ -127,15 +128,12 @@ built_in_commands = {
 def get_executables_from_path():
     executables = set()
     for directory in os.getenv("PATH", "").split(os.pathsep):
-        if not os.path.isdir(directory):
-            continue
+        if not os.path.isdir(directory): continue
         try:
             for file in os.listdir(directory):
-                full_path = os.path.join(directory, file)
-                if os.access(full_path, os.X_OK) and not os.path.isdir(full_path):
+                if os.access(os.path.join(directory, file), os.X_OK):
                     executables.add(file)
-        except PermissionError:
-            continue
+        except Exception: continue
     return list(executables)
 
 completion_options = list(built_in_commands.keys()) + get_executables_from_path()
@@ -144,20 +142,16 @@ def completer(text, state):
     matches = [cmd for cmd in completion_options if cmd.startswith(text)]
     return (matches[state] + ' ') if state < len(matches) else None
 
+# Safe Configuration for Windows
 readline.set_completer(completer)
 readline.parse_and_bind('tab: complete')
-readline.set_completion_display_matches_hook(
-    lambda substitution, matches, longest_match_length:
-        print(f"\n{' '.join(matches)}\n$ {readline.get_line_buffer()}", end="", flush=True)
-)
+if hasattr(readline, 'set_completion_display_matches_hook'):
+    readline.set_completion_display_matches_hook(
+        lambda substitution, matches, longest_match_length:
+            print(f"\n{' '.join(matches)}\n$ {readline.get_line_buffer()}", end="", flush=True)
+    )
 
 # --- Execution Logic ---
-def parse_args(shell_input):
-    parts = shlex.split(shell_input)
-    command = parts[0]
-    args = " ".join(parts[1:]) if len(parts) > 1 else None
-    return command, args
-
 def run_external_command(command_list, stdout=sys.stdout, stderr=sys.stderr):
     try:
         subprocess.run(command_list, stdout=stdout, stderr=stderr)
@@ -166,22 +160,20 @@ def run_external_command(command_list, stdout=sys.stdout, stderr=sys.stderr):
 
 def handle_redirection(command, operator):
     parts = command.split(operator)
-    cmd_part = parts[0].rstrip() # Remove trailing whitespace first
-    file_part = parts[1].strip()
-    
+    cmd_part, file_part = parts[0].rstrip(), parts[1].strip()
     use_stderr = False
-    # Check if the command ends with '2' (stderr) or '1' (stdout)
     if cmd_part.endswith("2"):
-        use_stderr = True
-        cmd_part = cmd_part[:-1].rstrip()
+        use_stderr, cmd_part = True, cmd_part[:-1].rstrip()
     elif cmd_part.endswith("1"):
-        # We also strip the '1' so it isn't passed as an argument to echo
         cmd_part = cmd_part[:-1].rstrip()
 
     cmd_list = shlex.split(cmd_part)
     file_mode = "a" if operator == ">>" else "w"
-
-    # Ensure the directory exists (CodeCrafters tests often use /tmp/sub/dir/)
+    
+    # Path resolution for /tmp/ on Windows
+    if file_part.startswith('/tmp/'):
+        file_part = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), file_part[5:])
+    
     os.makedirs(os.path.dirname(file_part), exist_ok=True)
 
     try:
@@ -193,95 +185,86 @@ def handle_redirection(command, operator):
     except Exception as e:
         print(f"bash: {file_part}: {e}")
 
+import multiprocessing
+
+def run_piped_command(cmd_args, input_pipe, output_pipe):
+    """Function to run in a separate process for Windows compatibility."""
+    # Redirect stdin/stdout to the provided pipes
+    if input_pipe is not None:
+        os.dup2(input_pipe, sys.stdin.fileno())
+    if output_pipe is not None:
+        os.dup2(output_pipe, sys.stdout.fileno())
+
+    # Execute the command
+    cmd_name = cmd_args[0]
+    if cmd_name in built_in_commands:
+        built_in_commands[cmd_name](" ".join(cmd_args[1:]) if len(cmd_args) > 1 else None)
+        sys.exit(0)
+    else:
+        try:
+            subprocess.run(cmd_args)
+        except Exception:
+            sys.exit(1)
+
 def handle_pipeline(command_line):
     # Split by pipe '|'
     commands = [shlex.split(cmd.strip()) for cmd in command_line.split('|')]
     num_cmds = len(commands)
-    
-    if num_cmds < 2:
-        print("Pipeline requires at least two commands.")
-        return
+    processes = []
+    pipes = []
 
-    pipes = [os.pipe() for _ in range(num_cmds - 1)]
-    pids = []
+    # Create the necessary pipes
+    for _ in range(num_cmds - 1):
+        # os.pipe() works on Windows, but the handles must be passed carefully
+        pipes.append(os.pipe())
 
     for i, cmd_args in enumerate(commands):
-        pid = os.fork()
-        if pid == 0: # Child
-            # Set up reading from previous pipe
-            if i > 0:
-                os.dup2(pipes[i - 1][0], sys.stdin.fileno())
-            # Set up writing to next pipe
-            if i < num_cmds - 1:
-                os.dup2(pipes[i][1], sys.stdout.fileno())
+        # Determine input and output for this specific command
+        in_p = pipes[i-1][0] if i > 0 else None
+        out_p = pipes[i][1] if i < num_cmds - 1 else None
 
-            # Close all pipe fds in child
-            for r, w in pipes:
-                os.close(r); os.close(w)
+        # Start a multiprocessing Process
+        p = multiprocessing.Process(
+            target=run_piped_command, 
+            args=(cmd_args, in_p, out_p)
+        )
+        p.start()
+        processes.append(p)
 
-            # Execution
-            cmd_name = cmd_args[0]
-            if cmd_name in built_in_commands:
-                # Builtins in pipes must exit explicitely or the child process hangs
-                built_in_commands[cmd_name](" ".join(cmd_args[1:]) if len(cmd_args) > 1 else None)
-                os._exit(0)
-            else:
-                try:
-                    os.execvp(cmd_name, cmd_args)
-                except FileNotFoundError:
-                    print(f"{cmd_name}: command not found")
-                    os._exit(1)
-        else: # Parent
-            pids.append(pid)
+        # Close the handles in the parent process immediately after starting
+        if in_p is not None: os.close(in_p)
+        if out_p is not None: os.close(out_p)
 
-    # Parent closes all pipes
-    for r, w in pipes:
-        os.close(r); os.close(w)
+    # Wait for all processes to finish
+    for p in processes:
+        p.join()
 
-    # Wait for children
-    for pid in pids:
-        os.waitpid(pid, 0)
-
-# --- Main Loop ---
+# --- Main ---
 def main():
     load_history_at_startup()
-
     while True:
         try:
             command = input("$ ")
-            if not command.strip():
+            if not command.strip(): continue
+            if "|" in command:
+                handle_pipeline(command)
                 continue
-        except (EOFError, KeyboardInterrupt):
-            # Handle Ctrl-D and Ctrl-C gracefully
-            print()
-            save_history_session()
-            sys.exit(0)
-
-        # 1. Pipeline
-        if "|" in command:
-            handle_pipeline(command)
-            continue
-
-        # 2. Redirection
-        if ">>" in command:
-            handle_redirection(command, ">>")
-            continue
-        if ">" in command:
-            handle_redirection(command, ">")
-            continue
-
-        # 3. Standard Execution
-        cmd_name, args = parse_args(command)
-        
-        if cmd_name in built_in_commands:
-            try:
+            if ">>" in command:
+                handle_redirection(command, ">>")
+                continue
+            if ">" in command:
+                handle_redirection(command, ">")
+                continue
+            
+            cmd_name, args = shlex.split(command)[0], " ".join(shlex.split(command)[1:]) if len(shlex.split(command)) > 1 else None
+            if cmd_name in built_in_commands:
                 built_in_commands[cmd_name](args)
-            except Exception as e:
-                print(f"Error executing builtin {cmd_name}: {e}")
-        elif shutil.which(cmd_name):
-            run_external_command(shlex.split(command))
-        else:
-            print(f"{cmd_name}: command not found")
+            elif shutil.which(cmd_name):
+                run_external_command(shlex.split(command))
+            else:
+                print(f"{cmd_name}: command not found")
+        except (EOFError, KeyboardInterrupt):
+            print(); save_history_session(); break
 
 if __name__ == "__main__":
     main()
