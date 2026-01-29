@@ -165,19 +165,24 @@ def run_external_command(command_list, stdout=sys.stdout, stderr=sys.stderr):
         print(f"{command_list[0]}: command not found")
 
 def handle_redirection(command, operator):
-    # Split command: "echo hello > file.txt" -> ["echo hello ", " file.txt"]
     parts = command.split(operator)
-    cmd_part = parts[0].strip()
+    cmd_part = parts[0].rstrip() # Remove trailing whitespace first
     file_part = parts[1].strip()
     
-    # Check for stderr redirection (2>, 2>>)
     use_stderr = False
+    # Check if the command ends with '2' (stderr) or '1' (stdout)
     if cmd_part.endswith("2"):
         use_stderr = True
-        cmd_part = cmd_part[:-1].strip()
+        cmd_part = cmd_part[:-1].rstrip()
+    elif cmd_part.endswith("1"):
+        # We also strip the '1' so it isn't passed as an argument to echo
+        cmd_part = cmd_part[:-1].rstrip()
 
     cmd_list = shlex.split(cmd_part)
     file_mode = "a" if operator == ">>" else "w"
+
+    # Ensure the directory exists (CodeCrafters tests often use /tmp/sub/dir/)
+    os.makedirs(os.path.dirname(file_part), exist_ok=True)
 
     try:
         with open(file_part, file_mode) as f:
@@ -185,8 +190,8 @@ def handle_redirection(command, operator):
                 run_external_command(cmd_list, stdout=sys.stdout, stderr=f)
             else:
                 run_external_command(cmd_list, stdout=f, stderr=sys.stderr)
-    except PermissionError:
-        print(f"bash: {file_part}: Permission denied")
+    except Exception as e:
+        print(f"bash: {file_part}: {e}")
 
 def handle_pipeline(command_line):
     # Split by pipe '|'
