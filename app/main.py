@@ -5,6 +5,13 @@ import os
 import shlex
 import multiprocessing
 
+from workers import Response, WorkerEntrypoint
+
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        # This is where your shell logic would go
+        return Response("Shell is active! Send a command via POST.")
+
 # --- 1. Platform & Library Setup ---
 try:
     import readline
