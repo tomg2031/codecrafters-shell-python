@@ -1,0 +1,4 @@
+name = "codecrafters-shell-python"
+main = "app/main.py"  # Change this to "src/main.py" if your file is in a folder
+compatibility_date = "2026-02-06"
+compatibility_flags = ["python_workers"]
